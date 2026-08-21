@@ -31,12 +31,23 @@ func (d regexpDetector) PendingPrefix(data []byte) bool {
 		}
 		return false
 	case "password-field":
-		return regexp.MustCompile(`(?i)(?:password|passwd|pwd|secret|api[_-]?key|access[_-]?token)\b\s*[:=]\s*["']?[^\s"',;}\]]*$`).Match(data)
+		return hasSensitiveFieldPrefix(data) || regexp.MustCompile(`(?i)(?:password|passwd|pwd|secret|api[_-]?key|access[_-]?token)\b\s*[:=]\s*["']?[^\s"',;}\]]*$`).Match(data)
 	case "common-token":
 		return regexp.MustCompile(`(?:gh[pousr]_?|github_pat_|sk-|xox[baprs]-|AKIA)[A-Za-z0-9_-]*$`).Match(data)
 	default:
 		return false
 	}
+}
+
+func hasSensitiveFieldPrefix(data []byte) bool {
+	for _, key := range []string{"password", "passwd", "pwd", "secret", "apikey", "api-key", "accesstoken", "access-token"} {
+		for length := 1; length < len(key); length++ {
+			if bytes.HasSuffix(bytes.ToLower(data), []byte(key[:length])) {
+				return true
+			}
+		}
+	}
+	return false
 }
 func (d regexpDetector) Detect(data []byte) []Match {
 	var out []Match

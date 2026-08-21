@@ -1,0 +1,8 @@
+title = "Safecat secret scanning configuration"
+
+[allowlist]
+description = "The repository contains intentionally synthetic redaction fixtures."
+paths = [
+  '''^testdata/''',
+  '''^file_test\.go$'''
+]

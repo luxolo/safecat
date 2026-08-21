@@ -45,6 +45,31 @@ func TestStreamingDetectsSplitJWTAndPreservesBytes(t *testing.T) {
 	}
 }
 
+func TestStreamingDetectsSplitPasswordField(t *testing.T) {
+	e := NewEngine(NewRegistry(PasswordFields()), DefaultPolicy())
+	var out []byte
+	input := []byte("password=fake-password-value\n")
+	for i := 0; i < len(input); i += 3 {
+		end := i + 3
+		if end > len(input) {
+			end = len(input)
+		}
+		ev, err := e.Process(Chunk{Data: input[i:end]})
+		if err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, ev.Data...)
+	}
+	ev, err := e.Finish()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out = append(out, ev.Data...)
+	if string(out) != "password=REDACTED\n" {
+		t.Fatalf("got %q", out)
+	}
+}
+
 func TestPlainTextEmitsBeforeEOF(t *testing.T) {
 	e := NewEngine(DefaultRegistry(), DefaultPolicy())
 	ev, err := e.Process(Chunk{Data: []byte("safe")})

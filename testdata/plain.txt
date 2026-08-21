@@ -1,0 +1,3 @@
+environment=demo
+password=fake-password-value
+message=keep-this-public-text
