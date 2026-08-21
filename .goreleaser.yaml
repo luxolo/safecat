@@ -46,3 +46,23 @@ nfpms:
       - deb
       - rpm
     bindir: /usr/bin
+
+# Publish a formula that downloads the release archives instead of building
+# safecat from source. HOMEBREW_TAP_TOKEN is supplied by the release workflow.
+brews:
+  - name: safecat
+    ids:
+      - safecat
+    repository:
+      owner: luxolo
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: https://github.com/luxolo/safecat
+    description: Streaming Unix filter for redacting secrets from text
+    license: Apache-2.0
+    install: |
+      bin.install "safecat"
+    test: |
+      assert_equal "safecat #{version}", shell_output("#{bin}/safecat --version").strip
