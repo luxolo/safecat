@@ -196,4 +196,13 @@ The repository includes `.goreleaser.yaml` for reproducible macOS/Linux
 archives and Debian/RPM packages. Release builds should be made from tags and
 published with their checksums.
 
+Pull requests and pushes to `main` run tests, vet, and build checks. A tag
+matching `v*` runs the release workflow, which repeats those checks, validates
+the GoReleaser configuration, smoke-tests the version and redaction behavior,
+and publishes the release only after all checks pass.
+
+For additional protection, configure the GitHub `release` environment with
+required reviewers and protect the `v*` tag pattern so releases can only be
+created by authorized maintainers.
+
 Safecat is licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).

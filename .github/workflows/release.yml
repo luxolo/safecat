@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - name: Checkout tagged commit
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify source
+        run: |
+          go test ./...
+          go vet ./...
+          go build ./...
+
+      - name: Validate GoReleaser configuration
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: check
+
+      - name: Build and smoke-test release binary
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          version="${RELEASE_VERSION#v}"
+          go build \
+            -trimpath \
+            -ldflags "-s -w -X github.com/luxolo/safecat.Version=${version}" \
+            -o /tmp/safecat \
+            ./cmd/safecat
+
+          test "$(/tmp/safecat --version)" = "safecat ${version}"
+          test "$(printf 'password: secret\n' | /tmp/safecat)" = "password: REDACTED"
+          test "$(printf '%s\n' \
+            'apiVersion: v1' \
+            'data:' \
+            '  config: c2VjcmV0' \
+            'kind: Secret' \
+            'metadata:' \
+            '  annotations:' \
+            '    example.io/data-hash: public-metadata' \
+            '  labels:' \
+            '    example.io/secret-type: cluster' | /tmp/safecat)" = "$(printf '%s\n' \
+            'apiVersion: v1' \
+            'data:' \
+            '  config: REDACTED' \
+            'kind: Secret' \
+            'metadata:' \
+            '  annotations:' \
+            '    example.io/data-hash: public-metadata' \
+            '  labels:' \
+            '    example.io/secret-type: cluster')"
+
+      - name: Publish release
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
