@@ -30,6 +30,10 @@ type options struct {
 func main() { os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)) }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) == 1 && (args[0] == "--version" || args[0] == "-v" || args[0] == "version") {
+		fmt.Fprintf(stdout, "safecat %s\n", safecat.Version)
+		return exitOK
+	}
 	if len(args) > 0 && args[0] == "init" {
 		return runInit(args[1:], stdout, stderr)
 	}
@@ -240,6 +244,7 @@ Options:
   --literal TEXT                 literal replacement (default REDACTED)
   --policy-file FILE             JSON policy file
   --policy NAME                  persistent policy from the user policy directory
+  --version                      show the safecat version
   --strict                       fail on unresolved suspicious content
   --explain                      report rule names and safe locations on stderr
   --color auto|always|never      color explain output (default auto)

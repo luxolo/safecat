@@ -1,0 +1,45 @@
+version: 2
+
+project_name: safecat
+
+before:
+  hooks:
+    - go test ./...
+
+builds:
+  - id: safecat
+    main: ./cmd/safecat
+    binary: safecat
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - "-s -w -X github.com/luxolo/safecat.Version={{.Version}}"
+
+archives:
+  - formats:
+      - tar.gz
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: checksums.txt
+
+nfpms:
+  - id: safecat
+    package_name: safecat
+    vendor: luxolo
+    homepage: https://github.com/luxolo/safecat
+    maintainer: luxolo
+    description: Streaming Unix filter for redacting secrets from text
+    license: Apache-2.0
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin

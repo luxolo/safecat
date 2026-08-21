@@ -45,6 +45,15 @@ go build -o safecat ./cmd/safecat
 sudo install safecat /usr/local/bin/safecat
 ```
 
+Check the installed version:
+
+```sh
+safecat --version
+```
+
+Release binaries report their semantic version. Builds made directly with
+`go install` or `go build` report `dev` unless a release linker flag is used.
+
 Installing the binary does not create user configuration. Initialize it only
 if you want persistent custom policies:
 
@@ -166,5 +175,25 @@ go test ./...
 go vet ./...
 go build ./...
 ```
+
+## Releases
+
+Releases use semantic version tags with a `v` prefix. The first release can be
+created with:
+
+```sh
+git tag -a v0.1.0 -m "Release v0.1.0"
+git push origin v0.1.0
+```
+
+The release build injects the tag version into the binary, so users will see:
+
+```text
+safecat 0.1.0
+```
+
+The repository includes `.goreleaser.yaml` for reproducible macOS/Linux
+archives and Debian/RPM packages. Release builds should be made from tags and
+published with their checksums.
 
 Safecat is licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).
