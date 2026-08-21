@@ -70,6 +70,32 @@ func TestStructuredKubeconfigAndYAMLStream(t *testing.T) {
 	}
 }
 
+func TestStructuredKubernetesMetadataKeys(t *testing.T) {
+	in := []byte(`apiVersion: v1
+data:
+  config:
+  name:
+  server:
+kind: Secret
+metadata:
+  annotations:
+    reconcile.external-secrets.io/data-hash: 96f841d37bbd62cea1533659dc6d8812
+  labels:
+    argocd.argoproj.io/secret-type: cluster
+  ownerReferences:
+  - apiVersion: external-secrets.io/v1beta1
+    controller: true
+type: Opaque
+`)
+	out, err := RedactStructured(in, StructuredOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(out, []byte("data:\n  config:")) || !bytes.Contains(out, []byte("secret-type: cluster")) || !bytes.Contains(out, []byte("data-hash: 96f")) {
+		t.Fatalf("metadata or empty values changed: %q", out)
+	}
+}
+
 func TestStructuredJSONAndMalformedFailClosed(t *testing.T) {
 	in := []byte(`{"kind":"Secret","data":{"password":"c2VjcmV0"},"stringData":{"token":"plain"},"metadata":{"name":"demo"}}`)
 	out, err := RedactStructured(in, StructuredOptions{})

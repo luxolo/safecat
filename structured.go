@@ -285,11 +285,14 @@ func shouldRedactPath(path []string, root any, policy Policy) bool {
 
 func sensitiveField(key string) bool {
 	key = strings.ToLower(key)
-	return strings.Contains(key, "token") || strings.Contains(key, "password") || strings.Contains(key, "passwd") || strings.Contains(key, "secret") || (strings.Contains(key, "private") && strings.Contains(key, "key")) || key == "client-key" || key == "client-key-data" || key == "client-certificate" || key == "client-certificate-data" || key == "certificate-authority-data" || key == "private-key"
+	if slash := strings.LastIndexByte(key, '/'); slash >= 0 {
+		key = key[slash+1:]
+	}
+	return strings.Contains(key, "token") || strings.Contains(key, "password") || strings.Contains(key, "passwd") || key == "secret" || strings.HasSuffix(key, "-secret") || strings.HasSuffix(key, "_secret") || (strings.Contains(key, "private") && strings.Contains(key, "key")) || key == "client-key" || key == "client-key-data" || key == "client-certificate" || key == "client-certificate-data" || key == "certificate-authority-data" || key == "private-key"
 }
 
-var yamlLinePattern = regexp.MustCompile(`^(?:[- ]*[A-Za-z_][A-Za-z0-9_.-]*\s*:|kind\s*:)`)
-var yamlKeyPattern = regexp.MustCompile(`^(\s*)(?:-\s*)?(?:["']?([A-Za-z_][A-Za-z0-9_.-]*)["']?)\s*:\s*(.*)$`)
+var yamlLinePattern = regexp.MustCompile(`^(?:[- ]*[A-Za-z_][A-Za-z0-9_./-]*\s*:|kind\s*:)`)
+var yamlKeyPattern = regexp.MustCompile(`^(\s*)(?:-\s*)?(?:["']?([A-Za-z_][A-Za-z0-9_./-]*)["']?)\s*:\s*(.*)$`)
 
 type yamlStackEntry struct {
 	indent int
