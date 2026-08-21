@@ -6,10 +6,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/luxolo/safecat"
 	"io"
 	"os"
 	"path/filepath"
-	"safecat"
 	"sort"
 	"strings"
 )

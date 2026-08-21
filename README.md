@@ -1,56 +1,119 @@
 # safecat
 
-Safecat is a byte-preserving streaming filter that redacts common secret forms.
-This repository currently implements the configuration work and tasks 01–05: project interfaces, bounded
-streaming I/O, independent detection/redaction, conservative structured
-YAML/JSON plus Kubernetes-aware redaction, and the composable CLI/policy layer.
-Release/security work remains for task 06.
+Safecat is a lightweight Unix filter that redacts secrets and other sensitive
+values before you print or share command output.
 
-## Toolchain
-
-The project uses Go 1.22 or newer and only the Go standard library.
+It reads stdin by default, preserves ordinary text, and writes sanitized output
+to stdout:
 
 ```sh
-go test ./...
-go build ./...
-printf 'password: hunter2\n' | go run ./cmd/safecat
-go run ./cmd/safecat --help
+kubectl get secret my-secret -o yaml | safecat
+cat ~/.kube/config | safecat
+terraform output | safecat
 ```
 
-The filter reads stdin when no file is named and writes transformed bytes to
-stdout. File arguments are processed in order. `--help` writes a short help
-message to stdout. Diagnostics are written to stderr and never include input
-values or match snippets. A broken pipe or other read/write failure exits
-non-zero; the filter does not fall back to printing the original input.
+Safecat is a display-safety tool, not a security boundary. Review output before
+sharing it.
 
-The library API is in the root package. `Chunk`, `Detector`, `Match`,
-`RedactionPolicy`, and `OutputEvent` are intentionally detector-neutral. The
-streaming `Engine` retains only a bounded pending window and delays its tail so
-matches split across reads can be detected.
+## Install
 
-Structured use is explicit through `RedactStructured`. JSON is validated and
-reserialized with the standard library; YAML streams use a conservative
-line-preserving transformer for common mappings, lists, comments, and document
-boundaries. Structured input is capped at 8 MiB and 128 YAML documents by
-default. Malformed or ambiguous YAML/JSON candidates return an error and no
-partial output. Unknown input falls back to the ordinary byte scanner. Secret
-`data`/`stringData`, kubeconfig credential fields, private-key material, and
-known sensitive paths are replaced without decoding or printing base64 content.
-The YAML support intentionally does not claim full YAML 1.2 coverage; anchors,
-complex keys, and unusual flow syntax are rejected or treated conservatively.
+### Homebrew
 
-The CLI reads stdin when no positional file is supplied, accepts `-` explicitly,
-and processes file/kubeconfig paths in order. `--format auto|plain|yaml|json`,
-`--replacement literal|mask|hash`, `--policy-file`, `--policy NAME`, `--strict`,
-`--explain`, and `--color auto|always|never` are supported. Explanation output goes only to
-stderr and contains rule names plus byte/line locations, never values.
+```sh
+brew tap luxolo/tap
+brew install safecat
+```
 
-## Persistent configuration
+### Go
 
-User configuration is stored outside the installation directory. The default
-location is Go's user configuration directory joined with `safecat`; an
-absolute `XDG_CONFIG_HOME` is honored when supplied. On Linux this is normally
-`~/.config/safecat`. Use these commands to inspect and initialize it:
+```sh
+go install github.com/luxolo/safecat/cmd/safecat@latest
+```
+
+Make sure the Go binary directory is on your `PATH`:
+
+```sh
+export PATH="$(go env GOPATH)/bin:$PATH"
+```
+
+### From source
+
+```sh
+git clone https://github.com/luxolo/safecat.git
+cd safecat
+go build -o safecat ./cmd/safecat
+sudo install safecat /usr/local/bin/safecat
+```
+
+Installing the binary does not create user configuration. Initialize it only
+if you want persistent custom policies:
+
+```sh
+safecat init
+```
+
+## Usage
+
+Safecat accepts stdin or file arguments. Multiple files are processed in order.
+
+```sh
+safecat config.yaml
+cat config.yaml | safecat
+safecat file1.yaml file2.json
+```
+
+Useful options:
+
+```text
+--format auto|plain|yaml|json  Select the input format
+--replacement literal|mask|hash Replacement strategy
+--literal TEXT                 Replacement text for literal mode
+--policy NAME                  Load one persistent policy
+--policy-file FILE             Load an explicit policy file
+--strict                       Fail if suspicious content remains
+--explain                      Report safe rule/location diagnostics to stderr
+--color auto|always|never      Color explanation output
+```
+
+Examples:
+
+```sh
+kubectl config view --raw | safecat
+kubectl get secret my-secret -o yaml | safecat --strict
+cat app.yaml | safecat --replacement mask
+cat output.json | safecat --format json
+```
+
+Diagnostics go to stderr. Safecat never includes input values in errors or
+explanation output, and processing errors fail closed instead of printing the
+original input.
+
+## What is redacted
+
+Built-in detection covers common password fields, JWTs, private PEM keys,
+common cloud/source-control tokens, Kubernetes kubeconfig credentials, and
+Kubernetes Secret data. YAML and JSON also support sensitive key and path rules.
+
+Unknown text is handled by the streaming scanner. Structured YAML and JSON are
+buffered up to 8 MiB and validated before output. JSON may be reserialized;
+comments and formatting are not guaranteed to survive JSON mode. YAML support is
+conservative and rejects unsupported or ambiguous syntax rather than emitting
+potentially unsafe output.
+
+## Persistent policies
+
+Safecat keeps user configuration outside the installation directory, so package
+upgrades do not replace it. The default location is the platform user config
+directory plus `safecat`; an absolute `XDG_CONFIG_HOME` is honored when set.
+On most Linux systems this is:
+
+```text
+~/.config/safecat/
+├── config.json
+└── policies/
+```
+
+Manage the configuration with:
 
 ```sh
 safecat init
@@ -59,47 +122,49 @@ safecat config show
 safecat policy list
 ```
 
-`init` creates restrictive `config.json` and `policies/` entries and does not
-overwrite existing user policies. Persistent policies are versioned JSON files
-under `policies/`, for example:
+Create a persistent policy in `policies/company.json`:
 
 ```json
 {
   "version": 1,
   "name": "company",
   "policy": {
-    "sensitive_keys": ["customerSecret"],
-    "sensitive_paths": ["spec.credentials.password"]
+    "sensitive_keys": ["customerSecret", "connectionString"],
+    "sensitive_paths": ["spec.credentials.password"],
+    "regex": [
+      {"name": "internal-id", "pattern": "INT-[0-9]+", "priority": 90}
+    ]
   }
 }
 ```
 
-By default safecat combines built-in defaults, `config.json`, persistent
-policies in deterministic filename order, a project-local `.safecat.json`, and
-an explicitly selected `--policy-file`. `--policy NAME` selects one persistent
-policy instead of loading all of them. Lists are merged uniquely, named regex
-rules are replaced by later definitions, and scalar/map values use the later
-layer. Missing optional files are ignored; malformed selected policies fail
-closed. User configuration is not part of the binary and survives normal
-upgrades.
+Use it explicitly:
 
-Policy files are JSON and intentionally local/static. Example:
-
-```json
-{
-  "replacement": "literal",
-  "literal": "MASKED",
-  "sensitive_keys": ["customerSecret"],
-  "sensitive_paths": ["spec.credentials.password"],
-  "regex": [{"name": "internal-id", "pattern": "INT-[0-9]+", "priority": 90}],
-  "detector_priority": {"jwt": 100}
-}
+```sh
+cat manifest.yaml | safecat --policy company
 ```
 
-Unknown policy fields, invalid regular expressions, malformed structured input,
-and bounded-buffer failures fail closed. Exit status 0 means success, 2 usage
-error, 3 input/output error, 4 processing or strict-mode failure, and 5 policy
-error. Errors are short, stderr-only, and secret-free. Before release, scripts
-may rely on these options, exit classes, stdin/file behavior, and the literal
-default marker `REDACTED`; diagnostic wording and JSON reserialization details
-are not compatibility contracts.
+Policy precedence is built-in defaults, user configuration, persistent
+policies, a project-local `.safecat.json`, and finally `--policy-file`. Lists
+are merged uniquely; later scalar, map, and same-named regex values win.
+Malformed, unsupported, oversized, or unsafe policy files fail closed.
+
+## Exit codes
+
+```text
+0  Success
+2  Usage error
+3  Input/output error
+4  Processing or strict-mode failure
+5  Policy/configuration error
+```
+
+## Development
+
+```sh
+go test ./...
+go vet ./...
+go build ./...
+```
+
+Safecat is licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).
