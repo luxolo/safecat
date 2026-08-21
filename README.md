@@ -196,6 +196,9 @@ The repository includes `.goreleaser.yaml` for reproducible macOS/Linux
 archives and Debian/RPM packages. Release builds should be made from tags and
 published with their checksums.
 
+Rerunning a release for the same tag is supported; existing GitHub assets are
+replaced rather than causing duplicate-name failures.
+
 Pull requests and pushes to `main` run tests, vet, and build checks. A tag
 matching `v*` runs the release workflow, which repeats those checks, validates
 the GoReleaser configuration, smoke-tests the version and redaction behavior,
